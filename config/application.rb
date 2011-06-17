@@ -38,5 +38,8 @@ module NdepthWebapp
 
     # Configure sensitive parameters which will be filtered from the log file.
     config.filter_parameters += [:password]
+    
+    # The directory where the android application is located.
+    config.android_application_dir = File.join("..", "ndepth-android-application")
   end
 end

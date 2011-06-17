@@ -20,3 +20,24 @@ production:
   database: db/production.sqlite3
   pool: 5
   timeout: 5000
+
+# nutrition:
+#   adapter: sqlite3
+#   database: db/nutrition.db
+#   pool: 5
+#   timeout: 5000
+
+nutrition:
+  adapter: mysql
+  encoding: utf8
+  reconnect: false
+  database: nutrition
+  pool: 5
+  username: root
+  password:
+
+usda_nutrition_data:
+  adapter: sqlite3
+  database: db/usda_nutrition_data.db 
+  pool: 5
+  timeout: 5000
