@@ -1,4 +1,5 @@
 require 'csv'
+require 'rake/clean'
 
 COL_SEP = "^"
 
@@ -316,28 +317,78 @@ INCLUDED_NUTR_NO = [
   "263" #Theobromine mg THEBRN
 ]
 
-def get_file_path(file_name)
-  file_path = File.join(Rails.application.config.android_application_dir, "res", "raw", file_name)
-  if (!File.exists?(file_path))
-    File.new(file_path, "w+")
-  end
-  file_path
+ANDROID_RES_DIR = File.join(NdepthWebapp::Application.config.android_application_dir, "res")
+ANDROID_RAW_DIR = File.join(ANDROID_RES_DIR, "raw")
+ANDROID_VALUES_DIR = File.join(ANDROID_RES_DIR, "values")
+TEMP_DIR = "android"
+
+FOODS_PREFIX = "foods"
+DRI_PREFIX = "dri"
+
+FOOD_GROUPS_FILENAME = "food_groups.csv"
+WEIGHTS_FILENAME = "weights.csv"
+NUTRIENTS_FILENAME = "nutrients.xml"
+
+def get_dri_filename(group)
+  parts = [DRI_PREFIX, group.gender]
+  parts << group.status unless !group.status
+  parts << (group.age_min < 1 ? group.age_min : group.age_min.to_i)
+  parts << (group.age_max < 1 ? group.age_max : group.age_max.to_i) unless !group.age_max
+  "#{parts.join('_')}.csv"
+end
+
+def get_nutrient_tagname(definition) 
+  definition[:tagname].empty? ? NUTR_NO_TO_TAGNAME[definition[:nutr_no].to_s] : definition[:tagname]
 end
 
 namespace :android do
   
-  desc "Exports the food groups file to CSV for the android application"
-  task :export_food_groups => :environment do 
-    CSV.open("food_groups.csv", "wb", {:col_sep => COL_SEP, :quote_char => "~"}) do |csv|
+  directory TEMP_DIR
+  
+  #############################################################################
+  ##  Food Groups Tasks
+  #############################################################################
+  
+  task :cleanup_food_groups_file do 
+    begin
+      rm(File.join(TEMP_DIR, FOOD_GROUPS_FILENAME))
+      rm(File.join(ANDROID_RAW_DIR, FOOD_GROUPS_FILENAME))
+    rescue
+    end
+  end
+  
+  desc "Generates the food groups CSV file for the Android application."
+  task :generate_food_groups_file => [:environment] do
+    CSV.open(File.join(TEMP_DIR, FOOD_GROUPS_FILENAME), "wb", {:col_sep => COL_SEP, :quote_char => "~"}) do |csv|
       Nutrition::FoodGroup.all.each do |food_group|
-        csv << [food_group[:fdgrp_cd], food_group[:fdgrp_desc]]
+        csv << [food_group[:fdgrp_cd], food_group[:fdgrp_desc].chomp]
       end
     end
   end
   
-  desc "Exports the weights file to CSV for the android application"
-  task :export_weights => :environment do 
-    CSV.open("weights.csv", "wb", {:col_sep => COL_SEP, :quote_char => "~"}) do |csv|
+  desc "Copy the generated food groups file to the Android project."
+  task :copy_food_groups_file do 
+    cp(FileList[File.join(TEMP_DIR, FOOD_GROUPS_FILENAME)], ANDROID_RAW_DIR)
+  end
+  
+  desc "Exports the food groups file to CSV for the android application"
+  task :export_food_groups => [TEMP_DIR, :cleanup_food_groups_file, :generate_food_groups_file, :copy_food_groups_file]
+  
+  #############################################################################
+  ##  Weight Tasks
+  #############################################################################
+  
+  task :cleanup_weights_file do 
+    begin
+      rm(File.join(TEMP_DIR, WEIGHTS_FILENAME))
+      rm(File.join(ANDROID_RAW_DIR, WEIGHTS_FILENAME))
+    rescue
+    end
+  end
+  
+  desc "Generates the weights CSV file for the Android application."
+  task :generate_weights_file => [:environment] do
+    CSV.open(File.join(TEMP_DIR, WEIGHTS_FILENAME), "wb", {:col_sep => COL_SEP, :quote_char => "~"}) do |csv|
       Nutrition::Weight.all.each do |weight|
         csv << [
           weight[:ndb_no],
@@ -347,10 +398,27 @@ namespace :android do
         ]
       end
     end
-  end  
+  end
   
-  desc "Flattens the nutrition data for easier use and import in the android application."
-  task :export_foods_and_nutrients => :environment do
+  desc "Copy the generated weights file to the Android project."
+  task :copy_weights_file do 
+    cp(FileList[File.join(TEMP_DIR, WEIGHTS_FILENAME)], ANDROID_RAW_DIR)
+  end
+  
+  desc "Exports the weights file to CSV for the android application"
+  task :export_weights => [TEMP_DIR, :cleanup_weights_file, :generate_weights_file, :copy_weights_file]  
+  
+  #############################################################################
+  ##  Food Tasks
+  #############################################################################
+  
+  task :cleanup_food_files do
+    rm(FileList[File.join(TEMP_DIR, "#{FOODS_PREFIX}*")])
+    rm(FileList[File.join(ANDROID_RAW_DIR, "#{FOODS_PREFIX}*")])
+  end
+  
+  desc "Generates the food CSV files for the Android application."
+  task :generate_food_files => [:environment] do 
     CSV.open("foods.csv", "wb", {:col_sep => COL_SEP}) do |csv|
       Nutrition::FoodDescription.all.each do |food|
         values = []
@@ -369,8 +437,52 @@ namespace :android do
   end
   
   desc "Splits the food file into files lass than one meg in size. Note you must have the corelibs extension installed on OS X"
-  task :split_foods_file => :environment do 
+  task :split_food_files => :environment do 
     system("gsplit -C 975k -a 1 -d foods.csv 'foods_'")
+  end
+  
+  desc "Copy the generated Food files to the Android project."
+  task :copy_food_files do 
+    cp(FileList[File.join(TEMP_DIR, "#{FOODS_PREFIX}*")], ANDROID_RAW_DIR)
+  end
+  
+  desc "Flattens the nutrition data for easier use and import in the android application."
+  task :export_foods => [TEMP_DIR, :cleanup_food_files, :generate_food_files, :split_food_files, :copy_food_files]
+  
+  #############################################################################
+  ##  Dietary Reference Intakes Tasks
+  #############################################################################
+  
+  task :cleanup_dri_files do 
+    rm(FileList[File.join(TEMP_DIR, "#{DRI_PREFIX}*")])
+    rm(FileList[File.join(ANDROID_RAW_DIR, "#{DRI_PREFIX}*")])
+  end
+  
+  desc "Generate the DRI CSV files for the Android project."
+  task :generate_dri_files => [:environment] do
+    puts "Generating the DRI CSV files for the Android project."
+    Nutrition::DietaryReferenceIntakeGroup.all.each do |group|
+      CSV.open(File.join(TEMP_DIR, get_dri_filename(group)), "wb") do |csv|
+        Nutrition::DietaryReferenceIntake.joins(:nutrient_definition).where(:dietary_reference_intake_group_id => group.id, 
+          :nutrient_definitions => {:nutr_no => INCLUDED_NUTR_NO}).each do |dri|
+          csv << [dri.tagname, dri.recommended_dietary_allowance, dri.adequate_intake, dri.upper_intake_level]
+        end
+      end
+    end
+  end
+  
+  desc "Copy the exported DRI files to the Android project."
+  task :copy_dri_files do
+    puts "Copying DRI CSV files to the android project..."
+    cp(FileList[File.join(TEMP_DIR, "#{DRI_PREFIX}*")], ANDROID_RAW_DIR)
+  end
+  
+  desc "Export Dietary Reference Intakes"
+  task :export_dris => [TEMP_DIR, :cleanup_dri_files, :generate_dri_files, :copy_dri_files]
+  
+  desc "Export nutrition data for android application."
+  multitask :export_all => ["android:export_food_groups", "android:export_weights", "android:export_foods", "android:export_dris"] do 
+    puts "Finished exporting data"
   end
   
   desc "Generates the columns for the foods table in the android application based on the INCLUDED_NUTR_NO array"
@@ -390,17 +502,34 @@ namespace :android do
     end
   end
   
-  desc ""
-  task :generate_food_nutrients_columns => :environment do
-    Nutrition::NutrientDefinition.where(:nutr_no => INCLUDED_NUTR_NO).order("sr_order").each do |definition|
-      tagname = definition[:tagname].empty? ? NUTR_NO_TO_TAGNAME[definition[:nutr_no].to_s] : definition[:tagname]
-      puts "<string name=\"#{tagname.downcase}\">#{definition[:nutr_desc]}</string>"
+  task :cleanup_nutrient_names_file do 
+    begin
+      rm(File.join(TEMP_DIR, NUTRIENTS_FILENAME))
+      rm(File.join(ANDROID_VALUES_DIR, NUTRIENTS_FILENAME))
+    rescue
     end
   end
   
-  desc "Export nutrition data for android application."
-  multitask :export_all => [:export_food_groups, :export_weights, :export_foods_and_nutrients, :split_foods_file] do 
-    puts "Finished exporting data"
+  desc "Generates the nutrient names string resource file for the Android project."
+  task :generate_nutrient_names_file => :environment do 
+    builder = Nokogiri::XML::Builder.new(:encoding => 'UTF-8') do |xml|
+      xml.resources {
+        Nutrition::NutrientDefinition.where(:nutr_no => INCLUDED_NUTR_NO).order("sr_order").each do |definition|
+          xml.string(:name => get_nutrient_tagname(definition).downcase){
+            xml.text definition[:nutr_desc]
+          } 
+        end
+      }
+    end
+    File.open(File.join(TEMP_DIR, NUTRIENTS_FILENAME), "w").write(builder.to_xml)
   end
+  
+  desc "Copies the nutrient names string file to the Android project."
+  task :copy_nutrient_names_file do
+    cp(File.join(TEMP_DIR, NUTRIENTS_FILENAME), File.join(ANDROID_VALUES_DIR, NUTRIENTS_FILENAME))
+  end
+  
+  desc "Export nutrient names string file to Android project."
+  task :export_nutrient_names_file => [TEMP_DIR, :cleanup_nutrient_names_file, :generate_nutrient_names_file, :copy_nutrient_names_file]
   
 end

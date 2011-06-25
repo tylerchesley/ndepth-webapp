@@ -8,6 +8,7 @@ gem 'rails', '3.0.3'
 gem 'sqlite3-ruby', :require => 'sqlite3'
 gem 'mysql'
 gem 'nutrition', :path => "../nutrition"
+gem 'typus'
 
 # Use unicorn as the web server
 # gem 'unicorn'
@@ -21,7 +22,7 @@ gem 'nutrition', :path => "../nutrition"
 
 # Bundle the extra gems:
 # gem 'bj'
-# gem 'nokogiri'
+gem 'nokogiri'
 # gem 'sqlite3-ruby', :require => 'sqlite3'
 # gem 'aws-s3', :require => 'aws/s3'
 
