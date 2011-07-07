@@ -9,7 +9,7 @@ NUTR_NO_TO_TAGNAME = {
   "578" => "VITB12_ADD", #Vitamin B-12, added
   "573" => "TOCPH_ADD", #Vitamin E, added
   "338" => "LUT_ZEA",
-  "324" => "VITD_IU",
+  "324" => "VITD_IU", # Temporary
   "676" => "", #22:1 c
   "664" => "", #22:1 t
   "666" => "", #18:2 i
@@ -320,6 +320,7 @@ INCLUDED_NUTR_NO = [
 ANDROID_RES_DIR = File.join(NdepthWebapp::Application.config.android_application_dir, "res")
 ANDROID_RAW_DIR = File.join(ANDROID_RES_DIR, "raw")
 ANDROID_VALUES_DIR = File.join(ANDROID_RES_DIR, "values")
+ANDROID_XML_DIR = File.join(ANDROID_RES_DIR, "xml")
 TEMP_DIR = "android"
 
 FOODS_PREFIX = "foods"
@@ -328,17 +329,18 @@ DRI_PREFIX = "dri"
 FOOD_GROUPS_FILENAME = "food_groups.csv"
 WEIGHTS_FILENAME = "weights.csv"
 NUTRIENTS_FILENAME = "nutrients.xml"
+UNITS_FILENAME = "units.xml"
 
 def get_dri_filename(group)
   parts = [DRI_PREFIX, group.gender]
   parts << group.status unless !group.status
   parts << (group.age_min < 1 ? group.age_min : group.age_min.to_i)
   parts << (group.age_max < 1 ? group.age_max : group.age_max.to_i) unless !group.age_max
-  "#{parts.join('_')}.csv"
+  "#{parts.join('_')}.xml"
 end
 
 def get_nutrient_tagname(definition) 
-  definition[:tagname].empty? ? NUTR_NO_TO_TAGNAME[definition[:nutr_no].to_s] : definition[:tagname]
+  NUTR_NO_TO_TAGNAME[definition[:nutr_no].to_s].nil? ? definition[:tagname] : NUTR_NO_TO_TAGNAME[definition[:nutr_no].to_s] 
 end
 
 namespace :android do
@@ -419,19 +421,31 @@ namespace :android do
   
   desc "Generates the food CSV files for the Android application."
   task :generate_food_files => [:environment] do 
-    CSV.open("foods.csv", "wb", {:col_sep => COL_SEP}) do |csv|
+    connection = Nutrition::Nutrient.connection
+    select_clause = "SELECT nutrients.nutr_no, nutr_val FROM `nutrients` WHERE "
+    in_clause = "(nutrients.nutr_no IN (#{INCLUDED_NUTR_NO.join(',')}))" 
+    order_clause = " ORDER BY sr_order;"
+    CSV.open(File.join(TEMP_DIR, "foods.csv"), "w", {:col_sep => COL_SEP, :quote_char => "~"}) do |csv|
       Nutrition::FoodDescription.all.each do |food|
-        values = []
-        values << food[:ndb_no]
-        values << food[:long_desc]
-        values << food[:fdgrp_cd]
-        values << food[:pro_factor]
-        values << food[:fat_factor]
-        values << food[:cho_factor]
-        Nutrition::NutrientDefinition.joins("LEFT OUTER JOIN nutrients ON nutrients.nutr_no = nutrient_definitions.nutr_no").where(:nutrients => {:ndb_no => food[:ndb_no]}, :nutrient_definitions => {:nutr_no => INCLUDED_NUTR_NO}).order("sr_order").each do |definition|
-          values << definition.nutrient[:nutr_val]
+        data = []
+        data << food[:ndb_no]
+        data << food[:long_desc]
+        data << food[:fdgrp_cd]
+        data << food[:pro_factor]
+        data << food[:fat_factor]
+        data << food[:cho_factor]
+        nutrients = {}
+        connection.execute("#{select_clause} (`nutrients`.`ndb_no` = '#{food[:ndb_no]}') AND #{in_clause}").each do |n|
+          nutrients[n[0]] = n[1]
         end
-        csv << values
+        INCLUDED_NUTR_NO.each do |nutr_no|
+          data << nutrients[nutr_no]
+        end
+        # Nutrition::NutrientDefinition.joins("LEFT OUTER JOIN nutrients ON nutrients.nutr_no = nutrient_definitions.nutr_no").where(:nutrients => {:ndb_no => food[:ndb_no]}, :nutrient_definitions => {:nutr_no => INCLUDED_NUTR_NO}).order("sr_order").each do |definition|
+        #           puts definition.nutrient[:nutr_val].to_s
+        #           data << definition.nutrient[:nutr_val]
+        #         end
+        csv << data
       end
     end
   end
@@ -455,26 +469,34 @@ namespace :android do
   
   task :cleanup_dri_files do 
     rm(FileList[File.join(TEMP_DIR, "#{DRI_PREFIX}*")])
-    rm(FileList[File.join(ANDROID_RAW_DIR, "#{DRI_PREFIX}*")])
+    rm(FileList[File.join(ANDROID_XML_DIR, "#{DRI_PREFIX}*")])
   end
   
   desc "Generate the DRI CSV files for the Android project."
   task :generate_dri_files => [:environment] do
     puts "Generating the DRI CSV files for the Android project."
     Nutrition::DietaryReferenceIntakeGroup.all.each do |group|
-      CSV.open(File.join(TEMP_DIR, get_dri_filename(group)), "wb") do |csv|
-        Nutrition::DietaryReferenceIntake.joins(:nutrient_definition).where(:dietary_reference_intake_group_id => group.id, 
-          :nutrient_definitions => {:nutr_no => INCLUDED_NUTR_NO}).each do |dri|
-          csv << [dri.tagname, dri.recommended_dietary_allowance, dri.adequate_intake, dri.upper_intake_level]
-        end
+      builder = Nokogiri::XML::Builder.new(:encoding => 'UTF-8') do |xml|
+        xml.dietary_reference_intakes {
+          Nutrition::DietaryReferenceIntake.joins(:nutrient_definition).where(:dietary_reference_intake_group_id => group.id, 
+            :nutrient_definitions => {:nutr_no => INCLUDED_NUTR_NO}).each do |dri|
+            xml.dietary_reference_intake {
+              xml.tagname dri.tagname
+              xml.rda     dri.recommended_dietary_allowance
+              xml.ai      dri.adequate_intake
+              xml.ul      dri.upper_intake_level
+            }
+          end
+        }  
       end
+      File.open(File.join(TEMP_DIR, get_dri_filename(group)), "w").write(builder.to_xml)
     end
   end
   
   desc "Copy the exported DRI files to the Android project."
   task :copy_dri_files do
     puts "Copying DRI CSV files to the android project..."
-    cp(FileList[File.join(TEMP_DIR, "#{DRI_PREFIX}*")], ANDROID_RAW_DIR)
+    cp(FileList[File.join(TEMP_DIR, "#{DRI_PREFIX}*")], ANDROID_XML_DIR)
   end
   
   desc "Export Dietary Reference Intakes"
@@ -501,6 +523,72 @@ namespace :android do
       puts "+ Foods.#{NUTR_NO_TO_COLUMN_NAME[definition[:nutr_no].to_s]} + \" REAL, \""
     end
   end
+  
+  desc "Generate Nutrients String array."
+  task :generate_nutrients_string_array => :environment do
+    nutrients = Nutrition::NutrientDefinition.where(:nutr_no => INCLUDED_NUTR_NO).order("sr_order")
+    tagnames = nutrients.map{|d| NUTR_NO_TO_COLUMN_NAME[d[:nutr_no]].to_s }
+    content_projection = ["_ID", "NDB_NO", "NAME", "PROTEIN_FACTOR", "FAT_FACTOR", "CARBOHYDRATE_FACTOR"].concat(tagnames)
+     
+    puts "public static final String[] CONTENT_PROJECTION = {"
+    puts content_projection.map{|c| "Foods.#{c}" }.join(",\n")
+    puts "}"
+    
+    puts "\n\n"
+    
+    content_projection.each_index do |i|
+      puts "public static final int #{content_projection[i]}_INDEX = #{i};"
+    end 
+     
+    puts "\n\n" 
+     
+    puts "private static final String[] NUTRIENTS = {"
+    puts tagnames.map{|n| "Foods.#{n}" }.join(",\n")
+    puts "}"
+    
+    puts "private static final String[] UNITS = {"
+    puts nutrients.map{|n| "\"#{n.units}\"" }.join(",\n")
+    puts "}"
+    
+  end
+  
+  #############################################################################
+  ##  Units String Tasks
+  #############################################################################
+  
+  task :cleanup_units_file do 
+    begin
+      rm(File.join(TEMP_DIR, UNITS_FILENAME))
+      rm(File.join(ANDROID_VALUES_DIR, UNITS_FILENAME))
+    rescue
+    end 
+  end
+  
+  desc "Generate the weights strings file."
+  task :generate_units_file => :environment do
+    builder = Nokogiri::XML::Builder.new(:encoding => 'UTF-8') do |xml|
+      xml.resources {
+        Nutrition::NutrientDefinition.group("units").each do |u|
+          xml.string(:name => "unit_#{u.units.downcase}") {
+            xml.text u.units
+          }
+        end
+      }
+    end
+    File.open(File.join(TEMP_DIR, UNITS_FILENAME), "w").write(builder.to_xml)
+  end
+  
+  desc "Copies the units string file to the Android project."
+  task :copy_units_file do
+    cp(File.join(TEMP_DIR, UNITS_FILENAME), File.join(ANDROID_VALUES_DIR, UNITS_FILENAME))
+  end
+  
+  desc "Export nutrient names string file to Android project."
+  task :export_units_file => [TEMP_DIR, :cleanup_units_file, :generate_units_file, :copy_units_file]
+  
+  #############################################################################
+  ##  Nutrient Names String Tasks
+  #############################################################################
   
   task :cleanup_nutrient_names_file do 
     begin
