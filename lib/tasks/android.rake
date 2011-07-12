@@ -3,6 +3,20 @@ require 'rake/clean'
 
 COL_SEP = "^"
 
+DRI_CONVERSION_FACTOR = {
+  "K" => 1000,
+  "NA" => 1000,
+  "WATER" => 1000
+}
+
+DRI_EXCLUDES = [
+  "CHOCDF",
+  "FAT",
+  "Linoleic Acid",
+  "a-Linolenic Acid",
+  "PROCNT"
+]
+
 # select CONCAT("""", nutr_no, """ => """, LOWER(tagname), """, #", nutr_desc) from nutrient_definitions WHERE tagname = "" order by sr_order;
 NUTR_NO_TO_TAGNAME = {
   "257" => "PROCNT_ADJ", #Adjusted Protein
@@ -167,6 +181,161 @@ NUTR_NO_TO_COLUMN_NAME = {
   "263" => "THEOBROMINE"
 }
 
+MACRO_GROUP = "MACRO"
+MINERALS_GROUP = "MINERALS"
+VITAMINS_GROUP = "VITMAINS"
+LIPID_GROUP = "LIPIDS"
+PROTEIN_GROUP = "PROTEIN"
+
+NUTR_NO_TO_GROUP = {
+  "255" => MACRO_GROUP, #Water g WATER
+  "208" => MACRO_GROUP, #Energy kcal ENERC_KCAL
+  "268" => MACRO_GROUP, #Energy kJ ENERC_KJ
+  "203" => MACRO_GROUP, #Protein g PROCNT
+  "257" => MACRO_GROUP, #Adjusted Protein g 
+  "204" => MACRO_GROUP, #Total lipid (fat) g FAT
+  "207" => MACRO_GROUP, #Ash g ASH
+  "205" => MACRO_GROUP, #Carbohydrate, by difference g CHOCDF
+  "291" => MACRO_GROUP, #Fiber, total dietary g FIBTG
+  "269" => MACRO_GROUP, #Sugars, total g SUGAR
+  "210" => MACRO_GROUP, #Sucrose g SUCS
+  "211" => MACRO_GROUP, #Glucose (dextrose) g GLUS
+  "212" => MACRO_GROUP, #Fructose g FRUS
+  "213" => MACRO_GROUP, #Lactose g LACS
+  "214" => MACRO_GROUP, #Maltose g MALS
+  "287" => MACRO_GROUP, #Galactose g GALS
+  "209" => MACRO_GROUP, #Starch g STARCH
+  "301" => MINERALS_GROUP, #Calcium, Ca mg CA
+  "303" => MINERALS_GROUP, #Iron, Fe mg FE
+  "304" => MINERALS_GROUP, #Magnesium, Mg mg MG
+  "305" => MINERALS_GROUP, #Phosphorus, P mg P
+  "306" => MINERALS_GROUP, #Potassium, K mg K
+  "307" => MINERALS_GROUP, #Sodium, Na mg NA
+  "309" => MINERALS_GROUP, #Zinc, Zn mg ZN
+  "312" => MINERALS_GROUP, #Copper, Cu mg CU
+  "315" => MINERALS_GROUP, #Manganese, Mn mg MN
+  "317" => MINERALS_GROUP, #Selenium, Se mcg SE
+  "313" => MINERALS_GROUP, #Fluoride, F mcg FLD
+  "401" => VITAMINS_GROUP, #Vitamin C, total ascorbic acid mg VITC
+  "404" => VITAMINS_GROUP, #Thiamin mg THIA
+  "405" => VITAMINS_GROUP, #Riboflavin mg RIBF
+  "406" => VITAMINS_GROUP, #Niacin mg NIA
+  "410" => VITAMINS_GROUP, #Pantothenic acid mg PANTAC
+  "415" => VITAMINS_GROUP, #Vitamin B-6 mg VITB6A
+  "417" => VITAMINS_GROUP, #Folate, total mcg FOL
+  "431" => VITAMINS_GROUP, #Folic acid mcg FOLAC
+  "432" => VITAMINS_GROUP, #Folate, food mcg FOLFD
+  "435" => VITAMINS_GROUP, #Folate, DFE mcg_DFE FOLDFE
+  "421" => VITAMINS_GROUP, #Choline, total mg CHOLN
+  "454" => VITAMINS_GROUP, #Betaine mg BETN
+  "418" => VITAMINS_GROUP, #Vitamin B-12 mcg VITB12
+  "578" => VITAMINS_GROUP, #Vitamin B-12, added mcg 
+  "320" => VITAMINS_GROUP, #Vitamin A, RAE mcg_RAE VITA_RAE
+  "319" => VITAMINS_GROUP, #Retinol mcg RETOL
+  "321" => VITAMINS_GROUP, #Carotene, beta mcg CARTB
+  "322" => VITAMINS_GROUP, #Carotene, alpha mcg CARTA
+  "334" => VITAMINS_GROUP, #Cryptoxanthin, beta mcg CRYPX
+  "318" => VITAMINS_GROUP, #Vitamin A, IU IU VITA_IU
+  "337" => VITAMINS_GROUP, #Lycopene mcg LYCPN
+  "338" => VITAMINS_GROUP, #Lutein + zeaxanthin mcg LUT+ZEA
+  "323" => VITAMINS_GROUP, #Vitamin E (alpha-tocopherol) mg TOCPHA
+  "573" => VITAMINS_GROUP, #Vitamin E, added mg 
+  "341" => VITAMINS_GROUP, #Tocopherol, beta mg TOCPHB
+  "342" => VITAMINS_GROUP, #Tocopherol, gamma mg TOCPHG
+  "343" => VITAMINS_GROUP, #Tocopherol, delta mg TOCPHD
+  "328" => VITAMINS_GROUP, #Vitamin D (D2 + D3) mcg VITD
+  "325" => VITAMINS_GROUP, #Vitamin D2 (ergocalciferol) mcg ERGCAL
+  "326" => VITAMINS_GROUP, #Vitamin D3 (cholecalciferol) mcg CHOCAL
+  "324" => VITAMINS_GROUP, #Vitamin D IU VITD
+  "430" => VITAMINS_GROUP, #Vitamin K (phylloquinone) mcg VITK1
+  "429" => VITAMINS_GROUP, #Dihydrophylloquinone mcg VITK1D
+  "428" => VITAMINS_GROUP, #Menaquinone-4 mcg MK4
+  "606" => LIPID_GROUP, #Fatty acids, total saturated g FASAT
+  "607" => LIPID_GROUP, #4:0 g F4D0
+  "608" => LIPID_GROUP, #6:0 g F6D0
+  "609" => LIPID_GROUP, #8:0 g F8D0
+  "610" => LIPID_GROUP, #10:0 g F10D0
+  "611" => LIPID_GROUP, #12:0 g F12D0
+  "696" => LIPID_GROUP, #13:0 g F13D0
+  "612" => LIPID_GROUP, #14:0 g F14D0
+  "652" => LIPID_GROUP, #15:0 g F15D0
+  "613" => LIPID_GROUP, #16:0 g F16D0
+  "653" => LIPID_GROUP, #17:0 g F17D0
+  "614" => LIPID_GROUP, #18:0 g F18D0
+  "615" => LIPID_GROUP, #20:0 g F20D0
+  "624" => LIPID_GROUP, #22:0 g F22D0
+  "654" => LIPID_GROUP, #24:0 g F24D0
+  "645" => LIPID_GROUP, #Fatty acids, total monounsaturated g FAMS
+  "625" => LIPID_GROUP, #14:1 g F14D1
+  "697" => LIPID_GROUP, #15:1 g F15D1
+  "626" => LIPID_GROUP, #16:1 undifferentiated g F16D1
+  "673" => LIPID_GROUP, #16:1 c g F16D1C
+  "662" => LIPID_GROUP, #16:1 t g F16D1T
+  "687" => LIPID_GROUP, #17:1 g F17D1
+  "617" => LIPID_GROUP, #18:1 undifferentiated g F18D1
+  "674" => LIPID_GROUP, #18:1 c g F18D1C
+  "663" => LIPID_GROUP, #18:1 t g F18D1T
+  "859" => LIPID_GROUP, #18:1-11t (18:1t n-7) g F18D1TN7
+  "628" => LIPID_GROUP, #20:1 g F20D1
+  "630" => LIPID_GROUP, #22:1 undifferentiated g F22D1
+  "676" => LIPID_GROUP, #22:1 c g 
+  "664" => LIPID_GROUP, #22:1 t g 
+  "671" => LIPID_GROUP, #24:1 c g F24D1C
+  "646" => LIPID_GROUP, #Fatty acids, total polyunsaturated g FAPU
+  "618" => LIPID_GROUP, #18:2 undifferentiated g F18D2
+  "675" => LIPID_GROUP, #18:2 n-6 c,c g F18D2CN6
+  "670" => LIPID_GROUP, #18:2 CLAs g F18D2CLA
+  "669" => LIPID_GROUP, #18:2 t,t g F18D2TT
+  "666" => LIPID_GROUP, #18:2 i g 
+  "665" => LIPID_GROUP, #18:2 t not further defined g 
+  "619" => LIPID_GROUP, #18:3 undifferentiated g F18D3
+  "851" => LIPID_GROUP, #18:3 n-3 c,c,c (ALA) g F18D3CN3
+  "685" => LIPID_GROUP, #18:3 n-6 c,c,c g F18D3CN6
+  "856" => LIPID_GROUP, #18:3i g 
+  "627" => LIPID_GROUP, #18:4 g F18D4
+  "672" => LIPID_GROUP, #20:2 n-6 c,c g F20D2CN6
+  "689" => LIPID_GROUP, #20:3 undifferentiated g F20D3
+  "852" => LIPID_GROUP, #20:3 n-3 g F20D3N3
+  "853" => LIPID_GROUP, #20:3 n-6 g F20D3N6
+  "620" => LIPID_GROUP, #20:4 undifferentiated g F20D4
+  "855" => LIPID_GROUP, #20:4 n-6 g F20D4N6
+  "629" => LIPID_GROUP, #20:5 n-3 (EPA) g F20D5
+  "857" => LIPID_GROUP, #21:5 g F21D5
+  "858" => LIPID_GROUP, #22:4 g F22D4
+  "631" => LIPID_GROUP, #22:5 n-3 (DPA) g F22D5
+  "621" => LIPID_GROUP, #22:6 n-3 (DHA) g F22D6
+  "605" => LIPID_GROUP, #Fatty acids, total trans g FATRN
+  "693" => LIPID_GROUP, #Fatty acids, total trans-monoenoic g FATRNM
+  "695" => LIPID_GROUP, #Fatty acids, total trans-polyenoic g FATRNP
+  "601" => LIPID_GROUP, #Cholesterol mg CHOLE
+  "636" => LIPID_GROUP, #Phytosterols mg PHYSTR
+  "638" => LIPID_GROUP, #Stigmasterol mg STID7
+  "639" => LIPID_GROUP, #Campesterol mg CAMD5
+  "641" => LIPID_GROUP, #Beta-sitosterol mg SITSTR
+  "501" => PROTEIN_GROUP, #Tryptophan g TRP_G
+  "502" => PROTEIN_GROUP, #Threonine g THR_G
+  "503" => PROTEIN_GROUP, #Isoleucine g ILE_G
+  "504" => PROTEIN_GROUP, #Leucine g LEU_G
+  "505" => PROTEIN_GROUP, #Lysine g LYS_G
+  "506" => PROTEIN_GROUP, #Methionine g MET_G
+  "507" => PROTEIN_GROUP, #Cystine g CYS_G
+  "508" => PROTEIN_GROUP, #Phenylalanine g PHE_G
+  "509" => PROTEIN_GROUP, #Tyrosine g TYR_G
+  "510" => PROTEIN_GROUP, #Valine g VAL_G
+  "511" => PROTEIN_GROUP, #Arginine g ARG_G
+  "512" => PROTEIN_GROUP, #Histidine g HISTN_G
+  "513" => PROTEIN_GROUP, #Alanine g ALA_G
+  "514" => PROTEIN_GROUP, #Aspartic acid g ASP_G
+  "515" => PROTEIN_GROUP, #Glutamic acid g GLU_G
+  "516" => PROTEIN_GROUP, #Glycine g GLY_G
+  "517" => PROTEIN_GROUP, #Proline g PRO_G
+  "518" => PROTEIN_GROUP, #Serine g SER_G
+  "521" => PROTEIN_GROUP, #Hydroxyproline g HYP
+  "221" => MACRO_GROUP, #Alcohol, ethyl g ALC
+  "262" => MACRO_GROUP, #Caffeine mg CAFFN
+  "263" => MACRO_GROUP, #Theobromine mg THEBRN
+}
+
 #select CONCAT("""", nutr_no, """, #", nutr_desc, " ", units, " ", tagname) from nutrient_definitions order by sr_order;
 INCLUDED_NUTR_NO = [
   "255", #Water g WATER
@@ -175,16 +344,16 @@ INCLUDED_NUTR_NO = [
   "203", #Protein g PROCNT
 #  "257", #Adjusted Protein g 
   "204", #Total lipid (fat) g FAT
-  "207", #Ash g ASH
+#  "207", #Ash g ASH
   "205", #Carbohydrate, by difference g CHOCDF
   "291", #Fiber, total dietary g FIBTG
   "269", #Sugars, total g SUGAR
-  "210", #Sucrose g SUCS
-  "211", #Glucose (dextrose) g GLUS
-  "212", #Fructose g FRUS
-  "213", #Lactose g LACS
-  "214", #Maltose g MALS
-  "287", #Galactose g GALS
+#  "210", #Sucrose g SUCS
+#  "211", #Glucose (dextrose) g GLUS
+#  "212", #Fructose g FRUS
+#  "213", #Lactose g LACS
+#  "214", #Maltose g MALS
+#  "287", #Galactose g GALS
   "209", #Starch g STARCH
   "301", #Calcium, Ca mg CA
   "303", #Iron, Fe mg FE
@@ -204,33 +373,33 @@ INCLUDED_NUTR_NO = [
   "410", #Pantothenic acid mg PANTAC
   "415", #Vitamin B-6 mg VITB6A
   "417", #Folate, total mcg FOL
-  "431", #Folic acid mcg FOLAC
-  "432", #Folate, food mcg FOLFD
-  "435", #Folate, DFE mcg_DFE FOLDFE
-  "421", #Choline, total mg CHOLN
-  "454", #Betaine mg BETN
+#  "431", #Folic acid mcg FOLAC
+#  "432", #Folate, food mcg FOLFD
+#  "435", #Folate, DFE mcg_DFE FOLDFE
+   "421", #Choline, total mg CHOLN
+#  "454", #Betaine mg BETN
   "418", #Vitamin B-12 mcg VITB12
-  "578", #Vitamin B-12, added mcg 
+#  "578", #Vitamin B-12, added mcg 
   "320", #Vitamin A, RAE mcg_RAE VITA_RAE
-  "319", #Retinol mcg RETOL
-  "321", #Carotene, beta mcg CARTB
-  "322", #Carotene, alpha mcg CARTA
-  "334", #Cryptoxanthin, beta mcg CRYPX
-  "318", #Vitamin A, IU IU VITA_IU
-  "337", #Lycopene mcg LYCPN
-  "338", #Lutein + zeaxanthin mcg LUT+ZEA
+#  "319", #Retinol mcg RETOL
+#  "321", #Carotene, beta mcg CARTB
+#  "322", #Carotene, alpha mcg CARTA
+#  "334", #Cryptoxanthin, beta mcg CRYPX
+#  "318", #Vitamin A, IU IU VITA_IU
+#  "337", #Lycopene mcg LYCPN
+#  "338", #Lutein + zeaxanthin mcg LUT+ZEA
   "323", #Vitamin E (alpha-tocopherol) mg TOCPHA
-  "573", #Vitamin E, added mg 
-  "341", #Tocopherol, beta mg TOCPHB
-  "342", #Tocopherol, gamma mg TOCPHG
-  "343", #Tocopherol, delta mg TOCPHD
-  "328", #Vitamin D (D2 + D3) mcg VITD
+#  "573", #Vitamin E, added mg 
+#  "341", #Tocopherol, beta mg TOCPHB
+#  "342", #Tocopherol, gamma mg TOCPHG
+#  "343", #Tocopherol, delta mg TOCPHD
+#  "328", #Vitamin D (D2 + D3) mcg VITD
   "325", #Vitamin D2 (ergocalciferol) mcg ERGCAL
-  "326", #Vitamin D3 (cholecalciferol) mcg CHOCAL
-  "324", #Vitamin D IU VITD
+#  "326", #Vitamin D3 (cholecalciferol) mcg CHOCAL
+#  "324", #Vitamin D IU VITD
   "430", #Vitamin K (phylloquinone) mcg VITK1
-  "429", #Dihydrophylloquinone mcg VITK1D
-  "428", #Menaquinone-4 mcg MK4
+#  "429", #Dihydrophylloquinone mcg VITK1D
+#  "428", #Menaquinone-4 mcg MK4
   "606", #Fatty acids, total saturated g FASAT
 #  "607", #4:0 g F4D0
 #  "608", #6:0 g F6D0
@@ -286,32 +455,32 @@ INCLUDED_NUTR_NO = [
 #  "631", #22:5 n-3 (DPA) g F22D5
 #  "621", #22:6 n-3 (DHA) g F22D6
   "605", #Fatty acids, total trans g FATRN
-  "693", #Fatty acids, total trans-monoenoic g FATRNM
-  "695", #Fatty acids, total trans-polyenoic g FATRNP
+#  "693", #Fatty acids, total trans-monoenoic g FATRNM
+#  "695", #Fatty acids, total trans-polyenoic g FATRNP
   "601", #Cholesterol mg CHOLE
-  "636", #Phytosterols mg PHYSTR
-  "638", #Stigmasterol mg STID7
-  "639", #Campesterol mg CAMD5
-  "641", #Beta-sitosterol mg SITSTR
-  "501", #Tryptophan g TRP_G
-  "502", #Threonine g THR_G
-  "503", #Isoleucine g ILE_G
-  "504", #Leucine g LEU_G
-  "505", #Lysine g LYS_G
-  "506", #Methionine g MET_G
-  "507", #Cystine g CYS_G
-  "508", #Phenylalanine g PHE_G
-  "509", #Tyrosine g TYR_G
-  "510", #Valine g VAL_G
-  "511", #Arginine g ARG_G
-  "512", #Histidine g HISTN_G
-  "513", #Alanine g ALA_G
-  "514", #Aspartic acid g ASP_G
-  "515", #Glutamic acid g GLU_G
-  "516", #Glycine g GLY_G
-  "517", #Proline g PRO_G
-  "518", #Serine g SER_G
-  "521", #Hydroxyproline g HYP
+#  "636", #Phytosterols mg PHYSTR
+#  "638", #Stigmasterol mg STID7
+#  "639", #Campesterol mg CAMD5
+#  "641", #Beta-sitosterol mg SITSTR
+#  "501", #Tryptophan g TRP_G
+#  "502", #Threonine g THR_G
+#  "503", #Isoleucine g ILE_G
+#  "504", #Leucine g LEU_G
+#  "505", #Lysine g LYS_G
+#  "506", #Methionine g MET_G
+#  "507", #Cystine g CYS_G
+#  "508", #Phenylalanine g PHE_G
+#  "509", #Tyrosine g TYR_G
+#  "510", #Valine g VAL_G
+#  "511", #Arginine g ARG_G
+#  "512", #Histidine g HISTN_G
+#  "513", #Alanine g ALA_G
+#  "514", #Aspartic acid g ASP_G
+#  "515", #Glutamic acid g GLU_G
+#  "516", #Glycine g GLY_G
+#  "517", #Proline g PRO_G
+#  "518", #Serine g SER_G
+#  "521", #Hydroxyproline g HYP
   "221", #Alcohol, ethyl g ALC
   "262", #Caffeine mg CAFFN
   "263" #Theobromine mg THEBRN
@@ -341,6 +510,12 @@ end
 
 def get_nutrient_tagname(definition) 
   NUTR_NO_TO_TAGNAME[definition[:nutr_no].to_s].nil? ? definition[:tagname] : NUTR_NO_TO_TAGNAME[definition[:nutr_no].to_s] 
+end
+
+def get_dri_value(tagname, value)
+  value ||= 0
+  cf = DRI_CONVERSION_FACTOR[tagname] || 1
+  value * cf
 end
 
 namespace :android do
@@ -431,9 +606,6 @@ namespace :android do
         data << food[:ndb_no]
         data << food[:long_desc]
         data << food[:fdgrp_cd]
-        data << food[:pro_factor]
-        data << food[:fat_factor]
-        data << food[:cho_factor]
         nutrients = {}
         connection.execute("#{select_clause} (`nutrients`.`ndb_no` = '#{food[:ndb_no]}') AND #{in_clause}").each do |n|
           nutrients[n[0]] = n[1]
@@ -478,13 +650,13 @@ namespace :android do
     Nutrition::DietaryReferenceIntakeGroup.all.each do |group|
       builder = Nokogiri::XML::Builder.new(:encoding => 'UTF-8') do |xml|
         xml.dietary_reference_intakes {
-          Nutrition::DietaryReferenceIntake.joins(:nutrient_definition).where(:dietary_reference_intake_group_id => group.id, 
-            :nutrient_definitions => {:nutr_no => INCLUDED_NUTR_NO}).each do |dri|
+          Nutrition::DietaryReferenceIntake.joins(:nutrient_definition).where("dietary_reference_intake_group_id = ? AND nutr_no IN (?) AND dietary_reference_intakes.tagname NOT IN (?)", 
+            group.id, INCLUDED_NUTR_NO, DRI_EXCLUDES).each do |dri|
             xml.dietary_reference_intake {
               xml.tagname dri.tagname
-              xml.rda     dri.recommended_dietary_allowance
-              xml.ai      dri.adequate_intake
-              xml.ul      dri.upper_intake_level
+              xml.rda     get_dri_value(dri.tagname, dri.recommended_dietary_allowance)
+              xml.ai      get_dri_value(dri.tagname, dri.adequate_intake)
+              xml.ul      get_dri_value(dri.tagname, dri.upper_intake_level)
             }
           end
         }  
@@ -518,17 +690,26 @@ namespace :android do
   
   desc "Generates the create table colums for the foods table in the android application based on the INCLUDED_NUTR_NO array"
   task :generate_food_nutrients_columns => :environment do
-    Nutrition::NutrientDefinition.where(:nutr_no => INCLUDED_NUTR_NO).order("sr_order").each do |definition|
-      tagname = definition[:tagname].empty? ? NUTR_NO_TO_TAGNAME[definition[:nutr_no].to_s] : definition[:tagname]
+    nutrients = Nutrition::NutrientDefinition.where(:nutr_no => INCLUDED_NUTR_NO).order("sr_order")
+    nutrients.each do |definition|
       puts "+ Foods.#{NUTR_NO_TO_COLUMN_NAME[definition[:nutr_no].to_s]} + \" REAL, \""
     end
+    
+    puts "\n\n"
+    
+    nutrients.each do |definition|
+      puts "+ Foods.#{NUTR_NO_TO_COLUMN_NAME[definition[:nutr_no].to_s]} + \", \""
+    end
+    
+    puts "(" + (1..(nutrients.length + 3)).map{|n| "?"}.join(", ") + ")"
+    
   end
   
   desc "Generate Nutrients String array."
   task :generate_nutrients_string_array => :environment do
     nutrients = Nutrition::NutrientDefinition.where(:nutr_no => INCLUDED_NUTR_NO).order("sr_order")
     tagnames = nutrients.map{|d| NUTR_NO_TO_COLUMN_NAME[d[:nutr_no]].to_s }
-    content_projection = ["_ID", "NDB_NO", "NAME", "PROTEIN_FACTOR", "FAT_FACTOR", "CARBOHYDRATE_FACTOR"].concat(tagnames)
+    content_projection = ["_ID", "NDB_NO", "NAME"].concat(tagnames)
      
     puts "public static final String[] CONTENT_PROJECTION = {"
     puts content_projection.map{|c| "Foods.#{c}" }.join(",\n")
@@ -602,10 +783,13 @@ namespace :android do
   task :generate_nutrient_names_file => :environment do 
     builder = Nokogiri::XML::Builder.new(:encoding => 'UTF-8') do |xml|
       xml.resources {
-        Nutrition::NutrientDefinition.where(:nutr_no => INCLUDED_NUTR_NO).order("sr_order").each do |definition|
-          xml.string(:name => get_nutrient_tagname(definition).downcase){
-            xml.text definition[:nutr_desc]
-          } 
+        Nutrition::NutrientDefinition.order("sr_order").each do |definition|
+          tagname = get_nutrient_tagname(definition).downcase
+          if (!tagname.empty?)
+            xml.string(:name => tagname){
+              xml.text definition[:nutr_desc]
+            } 
+          end
         end
       }
     end
