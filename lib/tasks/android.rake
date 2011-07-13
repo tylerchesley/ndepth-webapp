@@ -183,7 +183,7 @@ NUTR_NO_TO_COLUMN_NAME = {
 
 MACRO_GROUP = "MACRO"
 MINERALS_GROUP = "MINERALS"
-VITAMINS_GROUP = "VITMAINS"
+VITAMINS_GROUP = "VITAMINS"
 LIPID_GROUP = "LIPIDS"
 PROTEIN_GROUP = "PROTEIN"
 
@@ -731,6 +731,15 @@ namespace :android do
     puts nutrients.map{|n| "\"#{n.units}\"" }.join(",\n")
     puts "}"
     
+  end
+  
+  desc "Generate the Nutrient Groups lookup"
+  task :generate_nutrient_groups => :environment do 
+    puts "public static final NutrientGroup[] GROUPS = {"
+    Nutrition::NutrientDefinition.where(:nutr_no => INCLUDED_NUTR_NO).order("sr_order").each do |definition|
+      puts "NutrientGroup.#{NUTR_NO_TO_GROUP[definition[:nutr_no]]},"
+    end
+    puts "};"
   end
   
   #############################################################################
